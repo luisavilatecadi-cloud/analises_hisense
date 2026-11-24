@@ -20,9 +20,11 @@ st.set_page_config(page_title="Troca de Estoque", page_icon="🔄", layout="wide
 # ----------------------------------------------------------------------------
 # PARTE 0 - Login (usuário e senha em st.secrets)
 # Formato esperado no secrets.toml (ou em Settings > Secrets no Streamlit Cloud):
-#   [usuarios]
-#   admin = "SenhaForte123"
-#   joao  = "sha256:<hash_hex_da_senha>"   # opcional: senha em hash SHA-256
+#   [credenciais.acuracidade]
+#   senha = "SenhaForte123"
+#   [credenciais.geral]
+#   senha = "sha256:<hash_hex_da_senha>"   # opcional: senha em hash SHA-256
+# O nome da seção (acuracidade, geral) é o USUÁRIO digitado no login.
 # ----------------------------------------------------------------------------
 def _senha_confere(informada: str, guardada) -> bool:
     guardada = str(guardada).strip()  # str(): evita erro se a senha for só número no TOML
@@ -34,10 +36,16 @@ def _senha_confere(informada: str, guardada) -> bool:
 
 def exigir_login():
     try:
-        usuarios = {str(k).strip(): v for k, v in dict(st.secrets["usuarios"]).items()}
+        usuarios = {}
+        for k, v in dict(st.secrets["credenciais"]).items():
+            senha = v.get("senha") if hasattr(v, "get") else v
+            if senha is not None:
+                usuarios[str(k).strip().lower()] = senha
     except Exception:
+        usuarios = {}
+    if not usuarios:
         st.error(
-            "Secrets não configurado. Crie a seção [usuarios] com `usuario = \"senha\"` em "
+            "Secrets não configurado. Crie seções [credenciais.<usuario>] com `senha = \"...\"` em "
             ".streamlit/secrets.toml (local) ou em Settings > Secrets (Streamlit Cloud)."
         )
         st.stop()
@@ -52,7 +60,7 @@ def exigir_login():
 
     st.title("🔐 Acesso restrito")
     with st.form("login"):
-        u = st.text_input("Usuário").strip()
+        u = st.text_input("Usuário").strip().lower()
         p = st.text_input("Senha", type="password")
         entrar = st.form_submit_button("Entrar")
     if entrar:
