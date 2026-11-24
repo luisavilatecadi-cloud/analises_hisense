@@ -3,6 +3,8 @@
 # Regra: mesmo CODIGO + PRODUTO + SERIAL com Tipo Estoque DIFERENTE = troca de estoque
 # (serial que não movimentou dentro do mesmo CODIGO fica de fora)
 # ============================================================================
+import hashlib
+import hmac
 import io
 import unicodedata
 from datetime import datetime
@@ -13,6 +15,56 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(page_title="Troca de Estoque", page_icon="🔄", layout="wide")
+
+
+# ----------------------------------------------------------------------------
+# PARTE 0 - Login (usuário e senha em st.secrets)
+# Formato esperado no secrets.toml (ou em Settings > Secrets no Streamlit Cloud):
+#   [usuarios]
+#   admin = "SenhaForte123"
+#   joao  = "sha256:<hash_hex_da_senha>"   # opcional: senha em hash SHA-256
+# ----------------------------------------------------------------------------
+def _senha_confere(informada: str, guardada) -> bool:
+    guardada = str(guardada).strip()  # str(): evita erro se a senha for só número no TOML
+    if guardada.lower().startswith("sha256:"):
+        informada = hashlib.sha256(informada.encode()).hexdigest()
+        guardada = guardada[7:].strip().lower()
+    return hmac.compare_digest(informada.encode(), guardada.encode())
+
+
+def exigir_login():
+    try:
+        usuarios = {str(k).strip(): v for k, v in dict(st.secrets["usuarios"]).items()}
+    except Exception:
+        st.error(
+            "Secrets não configurado. Crie a seção [usuarios] com `usuario = \"senha\"` em "
+            ".streamlit/secrets.toml (local) ou em Settings > Secrets (Streamlit Cloud)."
+        )
+        st.stop()
+
+    if st.session_state.get("autenticado"):
+        with st.sidebar:
+            st.caption(f"👤 {st.session_state.get('usuario_logado', '')}")
+            if st.button("Sair"):
+                st.session_state.clear()
+                st.rerun()
+        return
+
+    st.title("🔐 Acesso restrito")
+    with st.form("login"):
+        u = st.text_input("Usuário").strip()
+        p = st.text_input("Senha", type="password")
+        entrar = st.form_submit_button("Entrar")
+    if entrar:
+        if u in usuarios and _senha_confere(p, usuarios[u]):
+            st.session_state["autenticado"] = True
+            st.session_state["usuario_logado"] = u
+            st.rerun()
+        st.error("Usuário ou senha inválidos.")
+    st.stop()
+
+
+exigir_login()
 
 # ----------------------------------------------------------------------------
 # PARTE 1 - Configuração e leitura
